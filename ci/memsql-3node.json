@@ -1,0 +1,34 @@
+[
+    {
+        "ParameterKey": "keyName",
+        "ParameterValue": "$[alfred_getkeypair]"
+    },
+    {
+        "ParameterKey": "license",
+        "ParameterValue": "override"
+    },
+    {
+        "ParameterKey": "aggInstanceType",
+        "ParameterValue": "m4.2xlarge"
+    },
+    {
+        "ParameterKey": "numAggregators",
+        "ParameterValue": "1"
+    },
+    {
+        "ParameterKey": "leafInstanceType",
+        "ParameterValue": "m4.2xlarge"
+    },
+    {
+        "ParameterKey": "numLeaves",
+        "ParameterValue": "1"
+    },
+    {
+        "ParameterKey": "enableHighAvailablity",
+        "ParameterValue": "false"
+    },
+    {
+        "ParameterKey": "rootPassword",
+        "ParameterValue": ""
+    }
+]

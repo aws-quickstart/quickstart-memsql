@@ -1,0 +1,1355 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "This CloudFormation template performs all the necessary steps of creating a VPC, subnet, and security groups; deploying a MemSQL cluster; and configuring the Studio environment with your cluster's information. This creates a MemSQL cluster running memsql-server 6.7.3-381c9eee8a and memsql-studio 1.3.4",
+  "Parameters": {
+    "leafInstanceType": {
+      "Default": "m4.2xlarge",
+      "Type": "String",
+      "Description": "EC2 instance type for leaves",
+      "AllowedValues": [
+        "m4.xlarge",
+        "m4.2xlarge",
+        "m4.4xlarge",
+        "m5.xlarge",
+        "m5.2xlarge",
+        "m5.4xlarge",
+        "r4.xlarge",
+        "r4.2xlarge",
+        "r4.4xlarge",
+        "r5.xlarge",
+        "r5.2xlarge",
+        "r5.4xlarge"
+      ]
+    },
+    "vpcID": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "ID of the VPC to launch into"
+    },
+    "numAggregators": {
+      "Default": 1,
+      "MinValue": 0,
+      "Type": "Number",
+      "Description": "Number of child aggregators in the cluster (between 0 and 3). Separately, the master aggregator will automatically be created",
+      "MaxValue": 3
+    },
+    "license": {
+      "Default": "",
+      "Type": "String",
+      "Description": "A license you received from the MemSQL Customer Portal"
+    },
+    "enableHighAvailability": {
+      "Default": "true",
+      "Type": "String",
+      "Description": "You should only specify an even number of leaves if enabled as an extra leaf will not be utilized. Learn more about High Availability: https://docs.memsql.com/operational-manual/v6.5/managing-high-availability/",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "keyName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Description": "AWS EC2 Key Pair for creating nodes. Learn more about EC2 Key Pairs: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html"
+    },
+    "securityGroups": {
+      "Type": "List<AWS::EC2::SecurityGroup::Id>",
+      "Description": "Comma delimited list of security group IDs for the instances. Must be in VPC defined above"
+    },
+    "aggInstanceType": {
+      "Default": "m4.2xlarge",
+      "Type": "String",
+      "Description": "EC2 instance type for master aggregator and child aggregators. AWS Instance type information: https://aws.amazon.com/ec2/instance-types",
+      "AllowedValues": [
+        "m4.xlarge",
+        "m4.2xlarge",
+        "m5.xlarge",
+        "m5.2xlarge",
+        "r4.xlarge",
+        "r4.2xlarge",
+        "r5.xlarge",
+        "r5.2xlarge"
+      ]
+    },
+    "rootPassword": {
+      "Default": "",
+      "NoEcho": true,
+      "Type": "String",
+      "Description": "Optional: define a root password that will be shared across all the nodes in your cluster"
+    },
+    "subnetID": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "ID of subnet to launch into. Must be in VPC defined above"
+    },
+    "numLeaves": {
+      "Default": 1,
+      "MinValue": 1,
+      "Type": "Number",
+      "Description": "Number of leaves in the cluster (between 1 and 6)",
+      "MaxValue": 6
+    }
+  },
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Parameters": [
+            "keyName",
+            "license"
+          ],
+          "Label": {
+            "default": "Basic Setup (Required)"
+          }
+        },
+        {
+          "Parameters": [
+            "aggInstanceType",
+            "numAggregators",
+            "leafInstanceType",
+            "numLeaves",
+            "enableHighAvailability",
+            "rootPassword"
+          ],
+          "Label": {
+            "default": "Advanced Configuration"
+          }
+        },
+        {
+          "Parameters": [
+            "vpcID",
+            "subnetID",
+            "securityGroups"
+          ],
+          "Label": {
+            "default": "VPC Configuration"
+          }
+        }
+      ],
+      "ParameterLabels": {
+        "leafInstanceType": {
+          "default": "Leaf Instance Type*"
+        },
+        "vpcID": {
+          "default": "VPC ID*"
+        },
+        "numAggregators": {
+          "default": "Number of Child Aggregators*"
+        },
+        "license": {
+          "default": "License*"
+        },
+        "enableHighAvailability": {
+          "default": "Enable High Availability*"
+        },
+        "keyName": {
+          "default": "Key Name*"
+        },
+        "securityGroups": {
+          "default": "Security Group IDs*"
+        },
+        "numLeaves": {
+          "default": "Number of Leaves*"
+        },
+        "rootPassword": {
+          "default": "MemSQL Password"
+        },
+        "subnetID": {
+          "default": "Subnet ID*"
+        },
+        "aggInstanceType": {
+          "default": "Aggregator Instance Type*"
+        }
+      }
+    }
+  },
+  "Mappings": {
+    "RegionMap": {
+      "us-west-1": {
+        "AMI": "ami-06f1af19d2e4e3caf"
+      },
+      "us-east-1": {
+        "AMI": "ami-0c5d82c126c8a544f"
+      },
+      "ap-northeast-1": {
+        "AMI": "ami-06dcf909f4a4a50c2"
+      },
+      "sa-east-1": {
+        "AMI": "ami-07b85b7fbd2619214"
+      },
+      "ap-northeast-2": {
+        "AMI": "ami-072d7cbf8205fe231"
+      },
+      "ap-southeast-1": {
+        "AMI": "ami-0fee3b1e65e4e05ba"
+      },
+      "ca-central-1": {
+        "AMI": "ami-0c33b1d0b5d40c1c8"
+      },
+      "ap-southeast-2": {
+        "AMI": "ami-0a414ea04ee6ae43a"
+      },
+      "us-west-2": {
+        "AMI": "ami-0e65cbabccaff318d"
+      },
+      "us-east-2": {
+        "AMI": "ami-05c4cdf8f82e7f0e7"
+      },
+      "ap-south-1": {
+        "AMI": "ami-0fc85eca99ff55005"
+      },
+      "eu-central-1": {
+        "AMI": "ami-0a4d5dc5fb73619d7"
+      },
+      "eu-west-1": {
+        "AMI": "ami-0d235ba5f1e482241"
+      },
+      "eu-west-2": {
+        "AMI": "ami-0566b308a2091e47e"
+      },
+      "eu-west-3": {
+        "AMI": "ami-0a00694b434a2fff7"
+      }
+    }
+  },
+  "Conditions": {
+    "CreateLeaf6": {
+      "Fn::Equals": [
+        {
+          "Ref": "numLeaves"
+        },
+        6
+      ]
+    },
+    "CreateLeaf5": {
+      "Fn::Or": [
+        {
+          "Condition": "CreateLeaf6"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "numLeaves"
+            },
+            5
+          ]
+        }
+      ]
+    },
+    "CreateLeaf4": {
+      "Fn::Or": [
+        {
+          "Condition": "CreateLeaf5"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "numLeaves"
+            },
+            4
+          ]
+        }
+      ]
+    },
+    "CreateLeaf3": {
+      "Fn::Or": [
+        {
+          "Condition": "CreateLeaf4"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "numLeaves"
+            },
+            3
+          ]
+        }
+      ]
+    },
+    "CreateLeaf2": {
+      "Fn::Or": [
+        {
+          "Condition": "CreateLeaf3"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "numLeaves"
+            },
+            2
+          ]
+        }
+      ]
+    },
+    "CreateLeaf1": {
+      "Fn::Or": [
+        {
+          "Condition": "CreateLeaf2"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "numLeaves"
+            },
+            1
+          ]
+        }
+      ]
+    },
+    "CreateAggregator1": {
+      "Fn::Or": [
+        {
+          "Condition": "CreateAggregator2"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "numAggregators"
+            },
+            1
+          ]
+        }
+      ]
+    },
+    "CreateAggregator2": {
+      "Fn::Or": [
+        {
+          "Condition": "CreateAggregator3"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "numAggregators"
+            },
+            2
+          ]
+        }
+      ]
+    },
+    "CreateAggregator3": {
+      "Fn::Equals": [
+        {
+          "Ref": "numAggregators"
+        },
+        3
+      ]
+    }
+  },
+  "Resources": {
+    "LeavesWaitHandle": {
+      "Type": "AWS::CloudFormation::WaitConditionHandle"
+    },
+    "NLBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "NetworkLoadBalancer"
+        },
+        "DefaultActions": [
+          {
+            "TargetGroupArn": {
+              "Ref": "NLBTargetGroup"
+            },
+            "Type": "forward"
+          }
+        ],
+        "Protocol": "TCP",
+        "Port": 3306
+      }
+    },
+    "AggregatorsWaitCondition": {
+      "Type": "AWS::CloudFormation::WaitCondition",
+      "Properties": {
+        "Count": {
+          "Ref": "numAggregators"
+        },
+        "Handle": {
+          "Ref": "AggregatorsWaitHandle"
+        },
+        "Timeout": 3000
+      }
+    },
+    "Leaf4": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=\"$(memsqlctl create-node -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=\"$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\":\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n",
+              {
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "LeavesWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Leaf",
+                  4
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Leaf"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "leafInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "Condition": "CreateLeaf4"
+    },
+    "MasterWaitCondition": {
+      "Type": "AWS::CloudFormation::WaitCondition",
+      "Properties": {
+        "Handle": {
+          "Ref": "MasterWaitHandle"
+        },
+        "Timeout": 3000
+      }
+    },
+    "Aggregator2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=\"$(memsqlctl create-node -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=\"$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\":\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n",
+              {
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "AggregatorsWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Aggregator",
+                  2
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Aggregator"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "aggInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "Condition": "CreateAggregator2"
+    },
+    "NetworkLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Subnets": [
+          {
+            "Ref": "subnetID"
+          }
+        ],
+        "Scheme": "internet-facing",
+        "Type": "network",
+        "Name": {
+          "Fn::Join": [
+            "-",
+            [
+              {
+                "Ref": "AWS::StackName"
+              },
+              "LB"
+            ]
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "LB"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "NLBTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "vpcID"
+        },
+        "Protocol": "TCP",
+        "Name": {
+          "Fn::Join": [
+            "-",
+            [
+              {
+                "Ref": "AWS::StackName"
+              },
+              "TG"
+            ]
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "LB"
+                ]
+              ]
+            }
+          }
+        ],
+        "Targets": [
+          {
+            "Port": 3306,
+            "Id": {
+              "Ref": "Master"
+            }
+          },
+          {
+            "Fn::If": [
+              "CreateAggregator1",
+              {
+                "Port": 3306,
+                "Id": {
+                  "Ref": "Aggregator1"
+                }
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
+          },
+          {
+            "Fn::If": [
+              "CreateAggregator2",
+              {
+                "Port": 3306,
+                "Id": {
+                  "Ref": "Aggregator2"
+                }
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
+          },
+          {
+            "Fn::If": [
+              "CreateAggregator3",
+              {
+                "Port": 3306,
+                "Id": {
+                  "Ref": "Aggregator3"
+                }
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
+          }
+        ],
+        "Port": 3306
+      }
+    },
+    "MasterWaitHandle": {
+      "Type": "AWS::CloudFormation::WaitConditionHandle"
+    },
+    "Leaf5": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=\"$(memsqlctl create-node -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=\"$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\":\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n",
+              {
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "LeavesWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Leaf",
+                  5
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Leaf"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "leafInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "Condition": "CreateLeaf5"
+    },
+    "Aggregator3": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=\"$(memsqlctl create-node -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=\"$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\":\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n",
+              {
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "AggregatorsWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Aggregator",
+                  3
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Aggregator"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "aggInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "Condition": "CreateAggregator3"
+    },
+    "AggregatorsWaitHandle": {
+      "Type": "AWS::CloudFormation::WaitConditionHandle"
+    },
+    "Aggregator1": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=\"$(memsqlctl create-node -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=\"$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\":\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n",
+              {
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "AggregatorsWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Aggregator",
+                  1
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Aggregator"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "aggInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "Condition": "CreateAggregator1"
+    },
+    "Master": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=$(memsqlctl create-node -y 2>&1 > /dev/null)\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=$(memsqlctl set-license --license ${LICENSE} -y 2>&1 > /dev/null)\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n    exit 1\nfi\n\n\nOUT=$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1 > /dev/null)\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=$(memsqlctl bootstrap-aggregator --host $INTERNAL_IP -y 2>&1 > /dev/null)\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n    exit 1\nfi\n\nif [ ${ENABLE_HIGH_AVAILABILITY} = true ]; then\n    OUT=$(memsqlctl update-config --key=redundancy_level --value=2 --set-global -y 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n        /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n        exit 1\n    fi\nfi\n\nOUT=$(memsqlctl update-config --key=sync_permissions --value=ON --set-global -y 2>&1 > /dev/null)\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n    exit 1\nfi\n\necho '${LEAF_DATA}' > /tmp/leaves.json\nfor leaf in $(cat /tmp/leaves.json | jq -r '.[]'); do\n    host=$(echo $leaf | jq -r '.. | .Host? | select(.)')\n    port=$(echo $leaf | jq -r '.. | .Port? | select(.)')\n    OUT=$(memsqlctl add-leaf --user root --password '${ROOT_PASSWORD}' --host $host --port $port -y 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n        /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n        exit 1\n    fi\ndone\n\necho '${AGGREGATOR_DATA}' > /tmp/aggregators.json\nfor aggregator in $(cat /tmp/aggregators.json | jq -r '.[]'); do\n    host=$(echo $aggregator | jq -r '.. | .Host? | select(.)')\n    port=$(echo $aggregator | jq -r '.. | .Port? | select(.)')\n    OUT=$(memsqlctl add-aggregator --user root --password '${ROOT_PASSWORD}' --host $host --port $port -y 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n        /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n        exit 1\n    fi\ndone\n\ncat << EOF > /var/lib/memsql-studio/studio.hcl\nversion = 1\n\ncluster \"${STACK_NAME}\" {\n  name = \"${STACK_NAME}\"\n  description = \"Cluster profile populated by Cloudformation template\"\n  hostname = \"localhost\"\n  port = 3306\n  profile = \"DEVELOPMENT\"\n}\nEOF\n\nsystemctl start memsql-studio\n\n/opt/aws/bin/cfn-signal -s true '${WAIT_HANDLE}'\n",
+              {
+                "LICENSE": {
+                  "Ref": "license"
+                },
+                "ENABLE_HIGH_AVAILABILITY": {
+                  "Ref": "enableHighAvailability"
+                },
+                "STACK_NAME": {
+                  "Ref": "AWS::StackName"
+                },
+                "AGGREGATOR_DATA": {
+                  "Fn::GetAtt": [
+                    "AggregatorsWaitCondition",
+                    "Data"
+                  ]
+                },
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "LEAF_DATA": {
+                  "Fn::GetAtt": [
+                    "LeavesWaitCondition",
+                    "Data"
+                  ]
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "MasterWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Master"
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Master"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "aggInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "DependsOn": [
+        "AggregatorsWaitCondition"
+      ]
+    },
+    "Leaf6": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=\"$(memsqlctl create-node -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=\"$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\":\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n",
+              {
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "LeavesWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Leaf",
+                  6
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Leaf"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "leafInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "Condition": "CreateLeaf6"
+    },
+    "Leaf3": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=\"$(memsqlctl create-node -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=\"$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\":\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n",
+              {
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "LeavesWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Leaf",
+                  3
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Leaf"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "leafInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "Condition": "CreateLeaf3"
+    },
+    "Leaf2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=\"$(memsqlctl create-node -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=\"$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\":\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n",
+              {
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "LeavesWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Leaf",
+                  2
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Leaf"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "leafInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "Condition": "CreateLeaf2"
+    },
+    "Leaf1": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": [
+              "#!/bin/bash -x\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\nexport MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\nOUT=\"$(memsqlctl create-node -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\nOUT=\"$(memsqlctl change-root-password --password \"${ROOT_PASSWORD}\" -y 2>&1)\"\nif [ $? -ne 0 ]; then\n    /opt/aws/bin/cfn-signal -s false --reason $OUT '${WAIT_HANDLE}'\n    exit 1\nfi\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\":\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n",
+              {
+                "TEMPLATE_TYPE": "quickstart-no-vpc-10",
+                "ROOT_PASSWORD": {
+                  "Ref": "rootPassword"
+                },
+                "WAIT_HANDLE": {
+                  "Ref": "LeavesWaitHandle"
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "Leaf",
+                  1
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Leaf"
+          }
+        ],
+        "ImageId": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 1024
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "keyName"
+        },
+        "InstanceType": {
+          "Ref": "leafInstanceType"
+        },
+        "NetworkInterfaces": [
+          {
+            "SubnetId": {
+              "Ref": "subnetID"
+            },
+            "DeviceIndex": 0,
+            "DeleteOnTermination": "true",
+            "GroupSet": {
+              "Ref": "securityGroups"
+            },
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      },
+      "Condition": "CreateLeaf1"
+    },
+    "LeavesWaitCondition": {
+      "Type": "AWS::CloudFormation::WaitCondition",
+      "Properties": {
+        "Count": {
+          "Ref": "numLeaves"
+        },
+        "Handle": {
+          "Ref": "LeavesWaitHandle"
+        },
+        "Timeout": 3000
+      }
+    }
+  },
+  "Outputs": {
+    "AggregatorLoadBalancerEndpoint": {
+      "Description": "Public DNSName of the load balancer for the aggregators",
+      "Value": {
+        "Fn::GetAtt": [
+          "NetworkLoadBalancer",
+          "DNSName"
+        ]
+      }
+    },
+    "MasterAggregator": {
+      "Description": "Public DNSName of the master aggregator",
+      "Value": {
+        "Fn::GetAtt": [
+          "Master",
+          "PublicDnsName"
+        ]
+      }
+    }
+  }
+}
