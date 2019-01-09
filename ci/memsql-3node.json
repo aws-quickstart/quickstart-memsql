@@ -1,34 +1,34 @@
 [
     {
-        "ParameterKey": "keyName",
+        "ParameterKey": "KeyPairName",
         "ParameterValue": "$[alfred_getkeypair]"
     },
     {
-        "ParameterKey": "license",
+        "ParameterKey": "License",
         "ParameterValue": "override"
     },
     {
-        "ParameterKey": "aggInstanceType",
-        "ParameterValue": "m4.2xlarge"
+        "ParameterKey": "AggInstanceType",
+        "ParameterValue": "m4.xlarge"
     },
     {
-        "ParameterKey": "numAggregators",
+        "ParameterKey": "NumAggregators",
         "ParameterValue": "1"
     },
     {
-        "ParameterKey": "leafInstanceType",
-        "ParameterValue": "m4.2xlarge"
+        "ParameterKey": "LeafInstanceType",
+        "ParameterValue": "m4.xlarge"
     },
     {
-        "ParameterKey": "numLeaves",
+        "ParameterKey": "NumLeaves",
         "ParameterValue": "1"
     },
     {
-        "ParameterKey": "enableHighAvailablity",
+        "ParameterKey": "EnableHighAvailablity",
         "ParameterValue": "false"
     },
     {
-        "ParameterKey": "rootPassword",
-        "ParameterValue": ""
+        "ParameterKey": "RootPassword",
+        "ParameterValue": "test"
     }
 ]
