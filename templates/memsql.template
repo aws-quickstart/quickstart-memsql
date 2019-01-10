@@ -49,7 +49,7 @@
       "MaxValue": 3
     },
     "License": {
-      "AllowedPattern": ".+==",
+      "AllowedPattern": ".+",
       "Type": "String",
       "NoEcho": true,
       "Description": "A license you received from the MemSQL Customer Portal",
