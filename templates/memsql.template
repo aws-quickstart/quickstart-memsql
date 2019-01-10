@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "This CloudFormation template performs all the necessary steps of creating a VPC, subnet, and security groups; deploying a MemSQL cluster; and configuring the Studio environment with your cluster's information. This creates a MemSQL cluster running memsql-server 6.7.7-7669a637ba and memsql-studio 1.4.0",
+  "Description": "This CloudFormation template performs all the necessary steps of creating a VPC, subnet, and security groups; deploying a MemSQL cluster; and configuring the Studio environment with your cluster's information. This creates a MemSQL cluster running memsql-server 6.7.8-a5a87c0575 and memsql-studio 1.5.0",
   "Parameters": {
     "AggInstanceType": {
       "Default": "m4.2xlarge",
@@ -49,9 +49,11 @@
       "MaxValue": 3
     },
     "License": {
-      "Default": "",
+      "AllowedPattern": ".+==",
       "Type": "String",
-      "Description": "A license you received from the MemSQL Customer Portal"
+      "NoEcho": true,
+      "Description": "A license you received from the MemSQL Customer Portal",
+      "ConstraintDescription": "Must provide a MemSQL license from the MemSQL Customer Portal at https://portal.memsql.com."
     },
     "EnableHighAvailability": {
       "Default": "true",
@@ -153,49 +155,49 @@
   "Mappings": {
     "RegionMap": {
       "us-west-1": {
-        "AMI": "ami-0d1799e6495c25372"
+        "AMI": "ami-0f24162cecbccba6f"
       },
       "us-east-1": {
-        "AMI": "ami-034199e8edd5937d8"
+        "AMI": "ami-03843b58e2ab3968d"
       },
       "ap-northeast-1": {
-        "AMI": "ami-0d78af8e5c0745d74"
+        "AMI": "ami-0bb80ef7c88f372d3"
       },
       "sa-east-1": {
-        "AMI": "ami-0ab0b9ca6f47e9d9c"
+        "AMI": "ami-039a0668388160dff"
       },
       "ap-northeast-2": {
-        "AMI": "ami-09fa10d167917afc0"
+        "AMI": "ami-07a565620f1c4b5f2"
       },
       "ap-southeast-1": {
-        "AMI": "ami-0dcf1b0b899bd8c7f"
+        "AMI": "ami-09a6465ebcf12de06"
       },
       "ca-central-1": {
-        "AMI": "ami-09f8786bc71859c58"
+        "AMI": "ami-007f34d551c447267"
       },
       "ap-southeast-2": {
-        "AMI": "ami-0aef0d1c144d0b857"
+        "AMI": "ami-038ee90a85441af5b"
       },
       "us-west-2": {
-        "AMI": "ami-0d04e1992c89e2b34"
+        "AMI": "ami-0744c3de305660e9c"
       },
       "us-east-2": {
-        "AMI": "ami-0626a352f94bbf220"
+        "AMI": "ami-039edf385bd8c3f46"
       },
       "ap-south-1": {
-        "AMI": "ami-095d80a14a0fc88b1"
+        "AMI": "ami-0f8ca3397455b82f2"
       },
       "eu-central-1": {
-        "AMI": "ami-0c93330781b59478c"
+        "AMI": "ami-04bf28d939fe1b267"
       },
       "eu-west-1": {
-        "AMI": "ami-0c7ace4debfbc7cf2"
+        "AMI": "ami-053a9885d5f3210c6"
       },
       "eu-west-2": {
-        "AMI": "ami-0f0beb5763e664204"
+        "AMI": "ami-0ff17957efde2f56d"
       },
       "eu-west-3": {
-        "AMI": "ami-0c34dcfa075994e76"
+        "AMI": "ami-08a22e39fa4236cd2"
       }
     }
   },

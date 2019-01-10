@@ -19,7 +19,7 @@ global:
   reporting: true
  
 tests:
-  quickstart:
+  quickstart-memsqlt1:
     template_file: memsql.template
     parameter_input: memsql-3node.json
 
