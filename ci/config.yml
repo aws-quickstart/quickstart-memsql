@@ -1,6 +1,6 @@
 global:
   marketplace-ami: false
-  owner: quickstart-eng@amazon.com
+  owner: platform-team@memsql.com
   qsname: quickstart-memsql
   regions:
     - ap-northeast-1
@@ -20,8 +20,6 @@ global:
  
 tests:
   quickstart-memsqlt1:
-    parameter_input: quickstart-memsql-example-params1.json
-    template_file: quickstart-memsql-example1.template
-  quickstart-memsqlt2:
-    parameter_input: quickstart-memsql-example-params2.json
-    template_file: quickstart-memsql-example2.template
+    template_file: memsql.template
+    parameter_input: memsql-3node.json
+
