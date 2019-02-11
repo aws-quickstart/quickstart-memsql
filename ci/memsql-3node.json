@@ -1,7 +1,7 @@
 [
     {
         "ParameterKey": "KeyPairName",
-        "ParameterValue": "$[alfred_getkeypair]"
+        "ParameterValue": "override"
     },
     {
         "ParameterKey": "License",
@@ -13,7 +13,7 @@
     },
     {
         "ParameterKey": "NumAggregators",
-        "ParameterValue": "1"
+        "ParameterValue": "3"
     },
     {
         "ParameterKey": "LeafInstanceType",
@@ -21,14 +21,14 @@
     },
     {
         "ParameterKey": "NumLeaves",
-        "ParameterValue": "1"
+        "ParameterValue": "3"
     },
     {
         "ParameterKey": "EnableHighAvailablity",
-        "ParameterValue": "false"
+        "ParameterValue": "true"
     },
     {
         "ParameterKey": "RootPassword",
-        "ParameterValue": "test"
+        "ParameterValue": "$[taskcat_genpass_16]"
     }
 ]
