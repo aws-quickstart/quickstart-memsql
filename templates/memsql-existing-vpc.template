@@ -164,7 +164,8 @@
     }
   },
   "Mappings": {
-    "RegionMap": {
+    "AWSAMIRegionMap": {
+      "AMI":
       "us-west-1": {
         "AMI": "ami-0f24162cecbccba6f"
       },

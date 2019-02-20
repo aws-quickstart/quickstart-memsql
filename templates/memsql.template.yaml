@@ -1,0 +1,526 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: This CloudFormation template performs all the necessary steps of creating
+  a VPC, subnet, and security groups; deploying a MemSQL cluster; and configuring
+  the Studio environment with your cluster's information. This creates a MemSQL cluster
+  running memsql-server 6.7.8-a5a87c0575 and memsql-studio 1.5.0
+Parameters:
+  AggInstanceType:
+    Default: m4.2xlarge
+    Type: String
+    Description: 'EC2 instance type for master aggregator and child aggregators. AWS
+      Instance type information: https://aws.amazon.com/ec2/instance-types'
+    AllowedValues:
+      - m4.xlarge
+      - m4.2xlarge
+      - m5.xlarge
+      - m5.2xlarge
+      - r4.xlarge
+      - r4.2xlarge
+      - r5.xlarge
+      - r5.2xlarge
+  LeafInstanceType:
+    Default: m4.2xlarge
+    Type: String
+    Description: EC2 instance type for leaves
+    AllowedValues:
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - r4.xlarge
+      - r4.2xlarge
+      - r4.4xlarge
+      - r5.xlarge
+      - r5.2xlarge
+      - r5.4xlarge
+  PublicSubnetID:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public Subnet ID to launch ASGs into.
+  AvailabilityZone:
+    Default: ''
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: Availability zone to use for the subnet that will be created. Leave
+      blank to let AWS select a zone for you.
+  NumAggregators:
+    Default: 1
+    MinValue: 0
+    Type: Number
+    Description: Number of child aggregators in the cluster (between 0 and 3). Separately,
+      the master aggregator will automatically be created
+    MaxValue: 3
+  License:
+    AllowedPattern: .+
+    Type: String
+    NoEcho: true
+    Description: A license you received from the MemSQL Customer Portal
+    ConstraintDescription: Must provide a MemSQL license from the MemSQL Customer
+      Portal at https://portal.memsql.com.
+  EnableHighAvailability:
+    Default: 'true'
+    Type: String
+    Description: 'You should only specify an even number of leaves if enabled as an
+      extra leaf will not be utilized. Learn more about High Availability: https://docs.memsql.com/operational-manual/v6.5/managing-high-availability/'
+    AllowedValues:
+      - 'true'
+      - 'false'
+  NumLeaves:
+    Default: 2
+    MinValue: 1
+    Type: Number
+    Description: Number of leaves in the cluster (between 1 and 6)
+    MaxValue: 6
+  VPCID:
+    Type: AWS::EC2::VPC::Id
+  RootPassword:
+    AllowedPattern: .+
+    Type: String
+    NoEcho: true
+    Description: Provide a MemSQL root password that will be set for all the nodes
+      in your cluster
+    ConstraintDescription: Must provide a MemSQL root password
+  RemoteAccessCIDR:
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    Default: '0.0.0.0/0'
+    Type: String
+    Description: IP CIDR range that is allowed to access the nodes (including SSH
+      access, connecting to MemSQL on port 3306, viewing MemSQL studio).
+    ConstraintDescription: CIDR range must be in the form x.x.x.x/x
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: The EC2 Key Pair to allow SSH access to the nodes.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Parameters:
+          - KeyPairName
+          - License
+          - RootPassword
+        Label:
+          default: Basic Setup (Required)
+      - Parameters:
+          - AggInstanceType
+          - NumAggregators
+          - LeafInstanceType
+          - NumLeaves
+          - EnableHighAvailability
+          - AvailabilityZone
+          - RemoteAccessCIDR
+        Label:
+          default: Advanced Configuration
+    ParameterLabels:
+      LeafInstanceType:
+        default: Leaf Instance Type*
+      AvailabilityZone:
+        default: Availability Zone
+      NumAggregators:
+        default: Number of Child Aggregators*
+      License:
+        default: License*
+      EnableHighAvailability:
+        default: Enable High Availability*
+      NumLeaves:
+        default: Number of Leaves*
+      RootPassword:
+        default: MemSQL Password*
+      KeyPairName:
+        default: Key Name*
+      RemoteAccessCIDR:
+        default: CIDR Range for Remote Access
+      AggInstanceType:
+        default: Aggregator Instance Type*
+Mappings:
+  AWSAMIRegionMap:
+    AMI:
+      MEMSQL: 'salkjfalksjdf'
+    us-west-1:
+      AMI: ami-0f24162cecbccba6f
+    us-east-1:
+      AMI: ami-03843b58e2ab3968d
+    ap-northeast-1:
+      AMI: ami-0bb80ef7c88f372d3
+    sa-east-1:
+      AMI: ami-039a0668388160dff
+    ap-northeast-2:
+      AMI: ami-07a565620f1c4b5f2
+    ap-southeast-1:
+      AMI: ami-09a6465ebcf12de06
+    ca-central-1:
+      AMI: ami-007f34d551c447267
+    ap-southeast-2:
+      AMI: ami-038ee90a85441af5b
+    us-west-2:
+      AMI: ami-0744c3de305660e9c
+    us-east-2:
+      AMI: ami-039edf385bd8c3f46
+    ap-south-1:
+      AMI: ami-0f8ca3397455b82f2
+    eu-central-1:
+      AMI: ami-04bf28d939fe1b267
+    eu-west-1:
+      AMI: ami-053a9885d5f3210c6
+    eu-west-2:
+      AMI: ami-0ff17957efde2f56d
+    eu-west-3:
+      AMI: ami-08a22e39fa4236cd2
+Resources:
+  LeafASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones: !Ref AvailabilityZone
+      #TODO: Variable.
+      MaxSize: !Ref NumLeaves
+      MinSize: '1'
+      DesiredCapacity: !Ref NumLeaves
+      LaunchConfigurationName: !Ref LeafLaunchConfig
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetID
+  LeafLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap
+        - AWSAMIRegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'LeafInstanceType'
+      SecurityGroups:
+        - !Ref 'Public22Access'
+        - !Ref 'Internal3306Access'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          INTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          echo 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-quickstart-10' >> /etc/environment
+          export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-quickstart-10
+          check_error() {
+            OUT=$("$@" 2>&1 > /dev/null)
+            if [ $? -ne 0 ]; then
+              /opt/aws/bin/cfn-signal -s false --reason "${!OUT}" '${LeafWaitHandle}'
+              exit 1
+            fi
+          }
+          /opt/aws/bin/cfn-init -v --stack '${AWS::StackName}' --resource LeafLaunchConfig --region ${AWS::Region}
+          ROOT_PASSWORD=$(cat /tmp/password.txt)
+          rm /tmp/password.txt
+          check_error memsqlctl create-node --password "${RootPassword}" --yes
+          /opt/aws/bin/cfn-signal -s true -d "{\"Host\":\"${!INTERNAL_IP}\",\"Port\":3306}" '${LeafWaitHandle}'
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  AggregatorASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones: !Ref AvailabilityZone
+      #TODO: Variable.
+      MaxSize: !Ref NumAggregators
+      MinSize: '1'
+      DesiredCapacity: !Ref NumAggregators
+      LaunchConfigurationName: !Ref AggregatorLaunchConfig
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetID
+      TargetGroupARNs:
+        - !Ref NLBTargetGroup
+      Tags:
+        - Key: Role
+          Value: Aggregator
+          PropagateAtLaunch: true
+  AggregatorLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          INTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          echo 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-quickstart-10' >> /etc/environment
+          export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-quickstart-10
+          check_error() {
+            OUT=$("$@" 2>&1 > /dev/null)
+            if [ $? -ne 0 ]; then
+              /opt/aws/bin/cfn-signal -s false --reason "${!OUT}" '${AggregatorWaitHandle}'
+              exit 1
+            fi
+          }
+          /opt/aws/bin/cfn-init -v --stack '${AWS::StackName}' --resource LeafLaunchConfig --region ${AWS::Region}
+          ROOT_PASSWORD=$(cat /tmp/password.txt)
+          rm /tmp/password.txt
+          check_error memsqlctl create-node --password "${!ROOT_PASSWORD}" --yes
+          /opt/aws/bin/cfn-signal -s true -d "{\"Host\":\"${!INTERNAL_IP}\",\"Port\":3306}" '${AggregatorWaitHandle}'
+      ImageId: !FindInMap
+        - AWSAMIRegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'AggInstanceType'
+      SecurityGroups:
+        - !Ref 'Public22Access'
+        - !Ref 'Public3306Access'
+        - !Ref 'Internal3306Access'
+      AssociatePublicIpAddress: true
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+
+  NLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref 'NetworkLoadBalancer'
+      DefaultActions:
+        - TargetGroupArn: !Ref 'NLBTargetGroup'
+          Type: forward
+      Protocol: TCP
+      Port: 3306
+  AggregatorWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    Properties:
+      Count: !Ref 'NumAggregators'
+      Handle: !Ref 'AggregatorWaitHandle'
+      Timeout: '3000'
+  MasterWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    Properties:
+      Handle: !Ref 'MasterWaitHandle'
+      Timeout: '3000'
+  NetworkLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - !Ref 'PublicSubnetID'
+      Scheme: internet-facing
+      Type: network
+  NLBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 3306
+      VpcId: !Ref 'VPCID'
+      Protocol: TCP
+  MasterWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  AggregatorWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  Public3306Access:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      SecurityGroupIngress:
+        - ToPort: 3306
+          FromPort: 3306
+          IpProtocol: tcp
+          CidrIp: !Ref 'RemoteAccessCIDR'
+      VpcId: !Ref 'VPCID'
+      GroupDescription: Public access to port 3306
+  Internal3306Access:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref 'VPCID'
+      GroupDescription: Internal access to port 3306
+  LeafWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  Internal3306AccessIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      SourceSecurityGroupId: !Ref 'Internal3306Access'
+      ToPort: 3306
+      IpProtocol: tcp
+      GroupId: !Ref 'Internal3306Access'
+      FromPort: 3306
+  LeavesWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    Properties:
+      Count: !Ref 'NumLeaves'
+      Handle: !Ref 'LeafWaitHandle'
+      Timeout: '3000'
+  Public80Access:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      SecurityGroupIngress:
+        - ToPort: 80
+          FromPort: 80
+          IpProtocol: tcp
+          CidrIp: !Ref 'RemoteAccessCIDR'
+      VpcId: !Ref 'VPCID'
+      GroupDescription: Public access to port 80
+  Public22Access:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      SecurityGroupIngress:
+        - ToPort: 22
+          FromPort: 22
+          IpProtocol: tcp
+          CidrIp: !Ref 'RemoteAccessCIDR'
+      VpcId: !Ref 'VPCID'
+      GroupDescription: Public access to port 22
+  MasterInstance:
+    DependsOn: MasterWaitHandle
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData:
+        Fn::Base64: !Sub |
+            #!/bin/bash
+            INTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+            echo 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-quickstart-10' >> /etc/environment
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-quickstart-10
+            check_error(){
+              OUT=$("$@" 2>&1 > /dev/null)
+              if [ $? -ne 0 ]; then
+                /opt/aws/bin/cfn-signal -s false --reason "${!OUT}" '${MasterWaitHandle}'
+                exit 1
+              fi
+            }
+            /opt/aws/bin/cfn-init -v --stack '${AWS::StackName}' --resource MasterInstance --region ${AWS::Region}
+            ROOT_PASSWORD=$(cat /tmp/password.txt)
+            rm /tmp/password.txt
+            check_error memsqlctl create-node --password "${!ROOT_PASSWORD}" --yes
+            check_error memsqlctl set-license --license '${License}' --yes
+            check_error memsqlctl bootstrap-aggregator --host "${!INTERNAL_IP}" --yes
+            if [ ${EnableHighAvailability} = true ];then
+              check_error memsqlctl update-config --key=redundancy_level --value=2 --set-global --yes
+            fi
+            check_error memsqlctl update-config --key=sync_permissions --value=ON --set-global --yes
+            echo '${LeavesWaitCondition.Data}' > /tmp/leaves.json
+            for leaf in $(cat /tmp/leaves.json | jq -r '.[]'); do
+              host=$(echo ${!leaf} | jq -r '.. | .Host? | select(.)')
+              port=$(echo ${!leaf} | jq -r '.. | .Port? | select(.)')
+              check_error memsqlctl add-leaf --user root --password "${!ROOT_PASSWORD}" --host ${!host} --port ${!port} --yes
+            done
+            echo '${AggregatorWaitCondition.Data}' > /tmp/aggregators.json
+            for aggregator in $(cat /tmp/aggregators.json | jq -r '.[]'); do
+              host=$(echo ${!aggregator} | jq -r '.. | .Host? | select(.)')
+              port=$(echo ${!aggregator} | jq -r '.. | .Port? | select(.)')
+            check_error memsqlctl add-aggregator --user root --password "${!ROOT_PASSWORD}" --host ${!host} --port ${!port} --yes
+            done
+            cat << EOF > /var/lib/memsql-studio/studio.hcl
+            version = 1
+            cluster "${AWS::StackName}" {
+            name = "${AWS::StackName}"
+            description = "Cluster profile populated by Cloudformation template"
+            hostname = "localhost"
+            port = 3306
+            profile = "DEVELOPMENT"
+            }
+            EOF
+            check_error systemctl start memsql-studio
+            /opt/aws/bin/cfn-signal -s true '${MasterWaitHandle}'
+      Tags:
+        - Key: Role
+          Value: Master
+      ImageId: !FindInMap
+        - AWSAMIRegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'AggInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
+          GroupSet:
+            - !Ref 'Public22Access'
+            - !Ref 'Public80Access'
+            - !Ref 'Public3306Access'
+            - !Ref 'Internal3306Access'
+          AssociatePublicIpAddress: true
+  SuspendASGRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Path: /
+      Policies:
+        - PolicyName: suspend-asg
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - autoscaling:SuspendProcesses
+                Resource: '*'
+  SuspendASGFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Copies objects from a source S3 bucket to a destination
+      Handler: index.handler
+      Runtime: python2.7
+      Role: !GetAtt 'SuspendASGRole.Arn'
+      Timeout: 240
+      Code:
+        ZipFile: |
+          import json
+          import logging
+          import boto3
+          import cfnresponse
+
+
+          def handler(event, context):
+            status = cfnresponse.SUCCESS
+            data = {}
+            reason = None
+            physical_resource_id = None
+            asg_client = boto3.client('autoscaling')
+            try:
+                if event['RequestType'] == 'Create':
+                    asg_list = event['ResourceProperties']['ASGList']
+                    for asg_name in asg_list:
+                        asg_client.suspend_processes(AutoScalingGroupName=asg_name,
+                        ScalingProcessses = ['HealthCheck', 'ReplaceUnhealthy'])
+            except Exception as e:
+                logging.error('Exception: %s' % e, exc_info=True)
+                reason = str(e)
+            cfnresponse.send(event, context, status, data, physical_resource_id, reason)
+  SuspendASG:
+    DependsOn:
+      - LeafASG
+      - AggregatorASG
+    Type: Custom::SuspendASG
+    Properties:
+      ServiceToken: !GetAtt 'SuspendASGFunction.Arn'
+      ASGList:
+        - !Ref 'AggregatorASG'
+        - !Ref 'LeafASG'
+Outputs:
+  AggregatorLoadBalancerEndpoint:
+    Description: Public DNSName of the load balancer for the aggregators
+    Value: !GetAtt 'NetworkLoadBalancer.DNSName'
+  MasterAggregator:
+    Description: Public DNSName of the master aggregator
+    Value: !GetAtt 'MasterInstance.PublicDnsName'

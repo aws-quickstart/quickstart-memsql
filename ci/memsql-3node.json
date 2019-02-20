@@ -24,11 +24,19 @@
         "ParameterValue": "3"
     },
     {
-        "ParameterKey": "EnableHighAvailablity",
+        "ParameterKey": "EnableHighAvailability",
         "ParameterValue": "true"
     },
     {
         "ParameterKey": "RootPassword",
         "ParameterValue": "$[taskcat_genpass_16]"
+    },
+    {
+        "ParameterKey":"AvailabilityZones",
+        "ParameterValue":"$[taskcat_getaz_2]"
+    },
+    {
+        "ParameterKey":"QSS3BucketName",
+        "ParameterValue":"$[taskcat_autobucket]"
     }
 ]
