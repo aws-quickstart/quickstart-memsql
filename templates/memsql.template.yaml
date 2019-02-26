@@ -39,10 +39,10 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
     Description: Public Subnet ID to launch ASGs into.
   AvailabilityZone:
-    Default: ''
+    Description: List of Availability Zones to use for the subnets in the VPC. Three
+      Availability Zones are used for this deployment, and the logical order of your
+      selections is preserved.
     Type: List<AWS::EC2::AvailabilityZone::Name>
-    Description: Availability zone to use for the subnet that will be created. Leave
-      blank to let AWS select a zone for you.
   NumAggregators:
     Default: 1
     MinValue: 0

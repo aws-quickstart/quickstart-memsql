@@ -32,8 +32,8 @@
         "ParameterValue": "$[taskcat_genpass_16]"
     },
     {
-        "ParameterKey":"AvailabilityZones",
-        "ParameterValue":"$[taskcat_getaz_2]"
+        "ParameterKey":"AvailabilityZone",
+        "ParameterValue":"$[taskcat_getaz_1]"
     },
     {
         "ParameterKey":"QSS3BucketName",
