@@ -1,9 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: This CloudFormation template performs all the necessary steps of creating
-  a VPC, subnet, and security groups; deploying a MemSQL cluster; and configuring
-  the Studio environment with your cluster's information. This creates a MemSQL cluster
-  running memsql-server 6.7.15-d4450c6798, memsql-studio 1.5.6, and memsql-toolbox
-  1.1.0.
+Description: This CloudFormation template performs all the necessary steps of deploying
+  a MemSQL cluster into an existing VPC, and configuring the Studio environment with
+  your cluster's information. This creates a MemSQL cluster running memsql-server
+  6.7.16-55671ba478, memsql-studio 1.5.6, and memsql-toolbox 1.1.0.
 Parameters:
   AggInstanceType:
     Default: m4.2xlarge
@@ -53,16 +52,6 @@ Parameters:
       - c5d.xlarge
       - c5d.2xlarge
       - c5d.4xlarge
-  AvailabilityZone:
-    Default: ''
-    Type: String
-    Description: Availability zone to use for the subnet that will be created. Leave
-      blank to let AWS select a zone for you. Please specify a valid zone if you are
-      using c5/c5d instance types.
-  VPCID:
-    Type: AWS::EC2::VPC::Id
-  PublicSubnetID:
-    Type: AWS::EC2::Subnet::Id
   NumAggregators:
     Default: 1
     MinValue: 0
@@ -77,6 +66,9 @@ Parameters:
     Description: A license you received from the MemSQL Customer Portal
     ConstraintDescription: Must provide a MemSQL license from the MemSQL Customer
       Portal at https://portal.memsql.com.
+  Subnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: ID of subnet to launch into. Must be in VPC defined above
   EnableHighAvailability:
     Default: 'true'
     Type: String
@@ -85,12 +77,19 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
+  SecurityGroups:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Comma-delimited list of security group IDs for each instance. Must
+      be in VPC defined above.
   NumLeaves:
     Default: 2
     MinValue: 1
     Type: Number
     Description: Number of leaves in the cluster (between 1 and 6)
     MaxValue: 6
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: ID of the VPC to launch into
   RootPassword:
     AllowedPattern: .+
     Type: String
@@ -98,22 +97,10 @@ Parameters:
     Description: Provide a MemSQL root password that will be set for all the nodes
       in your cluster
     ConstraintDescription: Must provide a MemSQL root password
-  RemoteAccessCIDR:
-    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
-    Default: '0.0.0.0/0'
-    Type: String
-    Description: IP CIDR range that is allowed to access the nodes (including SSH
-      access, connecting to MemSQL on port 3306, viewing MemSQL studio).
-    ConstraintDescription: CIDR range must be in the form x.x.x.x/x
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: The EC2 Key Pair to allow SSH access to the nodes.
 Metadata:
-  AWSAMIRegionMap:
-    Filters:
-      MEMSQL:
-        owner-id: 915533145685
-        name: memsql-cloudformation_*
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Parameters:
@@ -128,67 +115,70 @@ Metadata:
           - LeafInstanceType
           - NumLeaves
           - EnableHighAvailability
-          - AvailabilityZone
-          - RemoteAccessCIDR
         Label:
           default: Advanced Configuration
+      - Parameters:
+          - VPC
+          - Subnet
+          - SecurityGroups
+        Label:
+          default: VPC Configuration (Required)
     ParameterLabels:
-      LeafInstanceType:
-        default: Leaf Instance Type*
-      AvailabilityZone:
-        default: Availability Zone
+      Subnet:
+        default: Subnet ID*
+      NumLeaves:
+        default: Number of Leaves*
       NumAggregators:
         default: Number of Child Aggregators*
       License:
         default: License*
+      LeafInstanceType:
+        default: Leaf Instance Type*
       EnableHighAvailability:
         default: Enable High Availability*
-      NumLeaves:
-        default: Number of Leaves*
+      SecurityGroups:
+        default: Security Group IDs*
+      AggInstanceType:
+        default: Aggregator Instance Type*
+      VPC:
+        default: VPC ID*
       RootPassword:
         default: MemSQL Password*
       KeyPairName:
         default: Key Name*
-      RemoteAccessCIDR:
-        default: CIDR Range for Remote Access
-      AggInstanceType:
-        default: Aggregator Instance Type*
 Mappings:
-  AWSAMIRegionMap:
+  RegionMap:
     us-west-1:
-      MEMSQL: ami-0c284f516bb2f7ad3
+      AMI: ami-05d8b12f9ad5aa103
     us-east-1:
-      MEMSQL: ami-008786fd3a1677781
+      AMI: ami-098b9ea0ef1deb1cf
     ap-northeast-1:
-      MEMSQL: ami-0b74b48478f2b03c0
+      AMI: ami-0d8d7c95f047c97f2
     sa-east-1:
-      MEMSQL: ami-062d12d468743a07c
+      AMI: ami-0ce0e6d4d7885c41f
     ap-northeast-2:
-      MEMSQL: ami-014a083c019cb0123
+      AMI: ami-09cc929eb4c633568
     ap-southeast-1:
-      MEMSQL: ami-072582624ec5a80e2
+      AMI: ami-0ac949e1e6971dadd
     ca-central-1:
-      MEMSQL: ami-0ffb3df4cd56fca3a
+      AMI: ami-0b2236dde78dbaf5f
     ap-southeast-2:
-      MEMSQL: ami-003ab6a313ad5553e
+      AMI: ami-06054c1d19e0b3a94
     us-west-2:
-      MEMSQL: ami-05496088829218ee8
+      AMI: ami-0acae8bcf0097b691
     us-east-2:
-      MEMSQL: ami-0be132dbff24a0964
+      AMI: ami-0f652874ba4077905
     ap-south-1:
-      MEMSQL: ami-0c6db51ff861a2a5f
+      AMI: ami-08e9c0c041c1201dc
     eu-central-1:
-      MEMSQL: ami-0a1ee86680be71fe5
+      AMI: ami-0f932a72407c1f5fd
     eu-west-1:
-      MEMSQL: ami-065fbfdc638852d69
+      AMI: ami-02b87cc60e5ad9489
     eu-west-2:
-      MEMSQL: ami-03cd4f0b79977a731
+      AMI: ami-09607a5808801e8ff
     eu-west-3:
-      MEMSQL: ami-045d300fa6e93fd35
+      AMI: ami-00dab4b413c2248f3
 Conditions:
-  UseDefaultAZ: !Equals
-    - !Ref 'AvailabilityZone'
-    - ''
   CreateLeaf6: !Equals
     - !Ref 'NumLeaves'
     - 6
@@ -231,70 +221,6 @@ Conditions:
     - !Ref 'NumAggregators'
     - 3
 Resources:
-  Leaf6:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData: !Base64
-        Fn::Sub:
-          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
-            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
-            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
-            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
-            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
-            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
-            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
-            \ --resource Leaf6 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
-            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
-            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
-            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
-            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
-            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
-            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
-            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
-            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
-            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
-            \ \n"
-          - STACK_NAME: !Ref 'AWS::StackName'
-            TEMPLATE_TYPE: quickstart-10
-            REGION: !Ref 'AWS::Region'
-            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Leaf
-              - 6
-        - Key: Role
-          Value: Leaf
-      ImageId: !FindInMap
-        - AWSAMIRegionMap
-        - !Ref 'AWS::Region'
-        - MEMSQL
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 1024
-      KeyName: !Ref 'KeyPairName'
-      InstanceType: !Ref 'LeafInstanceType'
-      NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
-    Condition: CreateLeaf6
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          files:
-            /tmp/password.txt:
-              owner: root
-              content: !Ref 'RootPassword'
-              group: root
-              mode: '000400'
   NLBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -319,7 +245,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Subnets:
-        - !Ref 'PublicSubnetID'
+        - !Ref 'Subnet'
       Scheme: internet-facing
       Type: network
       Tags:
@@ -332,7 +258,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Port: 3306
-      VpcId: !Ref 'VPCID'
+      VpcId: !Ref 'VPC'
       Protocol: TCP
       Targets:
         - Port: 3306
@@ -360,606 +286,6 @@ Resources:
               - TG
   MasterWaitHandle:
     Type: AWS::CloudFormation::WaitConditionHandle
-  Leaf5:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData: !Base64
-        Fn::Sub:
-          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
-            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
-            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
-            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
-            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
-            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
-            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
-            \ --resource Leaf5 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
-            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
-            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
-            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
-            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
-            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
-            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
-            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
-            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
-            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
-            \ \n"
-          - STACK_NAME: !Ref 'AWS::StackName'
-            TEMPLATE_TYPE: quickstart-10
-            REGION: !Ref 'AWS::Region'
-            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Leaf
-              - 5
-        - Key: Role
-          Value: Leaf
-      ImageId: !FindInMap
-        - AWSAMIRegionMap
-        - !Ref 'AWS::Region'
-        - MEMSQL
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 1024
-      KeyName: !Ref 'KeyPairName'
-      InstanceType: !Ref 'LeafInstanceType'
-      NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
-    Condition: CreateLeaf5
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          files:
-            /tmp/password.txt:
-              owner: root
-              content: !Ref 'RootPassword'
-              group: root
-              mode: '000400'
-  Leaf4:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData: !Base64
-        Fn::Sub:
-          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
-            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
-            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
-            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
-            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
-            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
-            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
-            \ --resource Leaf4 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
-            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
-            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
-            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
-            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
-            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
-            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
-            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
-            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
-            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
-            \ \n"
-          - STACK_NAME: !Ref 'AWS::StackName'
-            TEMPLATE_TYPE: quickstart-10
-            REGION: !Ref 'AWS::Region'
-            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Leaf
-              - 4
-        - Key: Role
-          Value: Leaf
-      ImageId: !FindInMap
-        - AWSAMIRegionMap
-        - !Ref 'AWS::Region'
-        - MEMSQL
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 1024
-      KeyName: !Ref 'KeyPairName'
-      InstanceType: !Ref 'LeafInstanceType'
-      NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
-    Condition: CreateLeaf4
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          files:
-            /tmp/password.txt:
-              owner: root
-              content: !Ref 'RootPassword'
-              group: root
-              mode: '000400'
-  AggregatorsWaitHandle:
-    Type: AWS::CloudFormation::WaitConditionHandle
-  Leaf1:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData: !Base64
-        Fn::Sub:
-          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
-            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
-            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
-            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
-            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
-            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
-            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
-            \ --resource Leaf1 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
-            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
-            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
-            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
-            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
-            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
-            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
-            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
-            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
-            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
-            \ \n"
-          - STACK_NAME: !Ref 'AWS::StackName'
-            TEMPLATE_TYPE: quickstart-10
-            REGION: !Ref 'AWS::Region'
-            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Leaf
-              - 1
-        - Key: Role
-          Value: Leaf
-      ImageId: !FindInMap
-        - AWSAMIRegionMap
-        - !Ref 'AWS::Region'
-        - MEMSQL
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 1024
-      KeyName: !Ref 'KeyPairName'
-      InstanceType: !Ref 'LeafInstanceType'
-      NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
-    Condition: CreateLeaf1
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          files:
-            /tmp/password.txt:
-              owner: root
-              content: !Ref 'RootPassword'
-              group: root
-              mode: '000400'
-  Public3306Access:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      SecurityGroupIngress:
-        - ToPort: '3306'
-          FromPort: '3306'
-          IpProtocol: tcp
-          CidrIp: !Ref 'RemoteAccessCIDR'
-      VpcId: !Ref 'VPCID'
-      GroupDescription: Public access to port 3306
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Public3306SecurityGroup
-  Leaf2:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData: !Base64
-        Fn::Sub:
-          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
-            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
-            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
-            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
-            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
-            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
-            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
-            \ --resource Leaf2 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
-            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
-            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
-            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
-            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
-            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
-            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
-            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
-            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
-            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
-            \ \n"
-          - STACK_NAME: !Ref 'AWS::StackName'
-            TEMPLATE_TYPE: quickstart-10
-            REGION: !Ref 'AWS::Region'
-            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Leaf
-              - 2
-        - Key: Role
-          Value: Leaf
-      ImageId: !FindInMap
-        - AWSAMIRegionMap
-        - !Ref 'AWS::Region'
-        - MEMSQL
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 1024
-      KeyName: !Ref 'KeyPairName'
-      InstanceType: !Ref 'LeafInstanceType'
-      NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
-    Condition: CreateLeaf2
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          files:
-            /tmp/password.txt:
-              owner: root
-              content: !Ref 'RootPassword'
-              group: root
-              mode: '000400'
-  LeavesWaitHandle:
-    Type: AWS::CloudFormation::WaitConditionHandle
-  Leaf3:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData: !Base64
-        Fn::Sub:
-          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
-            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
-            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
-            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
-            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
-            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
-            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
-            \ --resource Leaf3 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
-            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
-            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
-            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
-            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
-            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
-            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
-            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
-            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
-            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
-            \ \n"
-          - STACK_NAME: !Ref 'AWS::StackName'
-            TEMPLATE_TYPE: quickstart-10
-            REGION: !Ref 'AWS::Region'
-            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Leaf
-              - 3
-        - Key: Role
-          Value: Leaf
-      ImageId: !FindInMap
-        - AWSAMIRegionMap
-        - !Ref 'AWS::Region'
-        - MEMSQL
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 1024
-      KeyName: !Ref 'KeyPairName'
-      InstanceType: !Ref 'LeafInstanceType'
-      NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
-    Condition: CreateLeaf3
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          files:
-            /tmp/password.txt:
-              owner: root
-              content: !Ref 'RootPassword'
-              group: root
-              mode: '000400'
-  Internal3306AccessIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      SourceSecurityGroupId: !Ref 'InternalAccess'
-      ToPort: '3306'
-      IpProtocol: tcp
-      GroupId: !Ref 'InternalAccess'
-      FromPort: '3306'
-  InternalAccess:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId: !Ref 'VPCID'
-      GroupDescription: Internal access to port 3306 and 22
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - InternalAccessSecurityGroup
-  LeavesWaitCondition:
-    Type: AWS::CloudFormation::WaitCondition
-    Properties:
-      Count: !Ref 'NumLeaves'
-      Handle: !Ref 'LeavesWaitHandle'
-      Timeout: 3000
-  Public80Access:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      SecurityGroupIngress:
-        - ToPort: '80'
-          FromPort: '80'
-          IpProtocol: tcp
-          CidrIp: !Ref 'RemoteAccessCIDR'
-      VpcId: !Ref 'VPCID'
-      GroupDescription: Public access to port 80
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Public80SecurityGroup
-  Internal22AccessIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      SourceSecurityGroupId: !Ref 'InternalAccess'
-      ToPort: '22'
-      IpProtocol: tcp
-      GroupId: !Ref 'InternalAccess'
-      FromPort: '22'
-  Public22Access:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      SecurityGroupIngress:
-        - ToPort: '22'
-          FromPort: '22'
-          IpProtocol: tcp
-          CidrIp: !Ref 'RemoteAccessCIDR'
-      VpcId: !Ref 'VPCID'
-      GroupDescription: Public access to port 22
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Public22SecurityGroup
-  Aggregator2:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData: !Base64
-        Fn::Sub:
-          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
-            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
-            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
-            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
-            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
-            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
-            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
-            \ --resource Aggregator2 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
-            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
-            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
-            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
-            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
-            \ node, and add this node as an aggregator\nsleep 30\n\nget_public_key()\
-            \ {\n    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT\
-            \ value FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
-            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
-            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
-            \ \n"
-          - STACK_NAME: !Ref 'AWS::StackName'
-            TEMPLATE_TYPE: quickstart-10
-            REGION: !Ref 'AWS::Region'
-            WAIT_HANDLE: !Ref 'AggregatorsWaitHandle'
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Aggregator
-              - 2
-        - Key: Role
-          Value: Aggregator
-      ImageId: !FindInMap
-        - AWSAMIRegionMap
-        - !Ref 'AWS::Region'
-        - MEMSQL
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 1024
-      KeyName: !Ref 'KeyPairName'
-      InstanceType: !Ref 'AggInstanceType'
-      NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'Public3306Access'
-            - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
-    Condition: CreateAggregator2
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          files:
-            /tmp/password.txt:
-              owner: root
-              content: !Ref 'RootPassword'
-              group: root
-              mode: '000400'
-  Aggregator3:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData: !Base64
-        Fn::Sub:
-          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
-            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
-            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
-            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
-            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
-            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
-            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
-            \ --resource Aggregator3 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
-            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
-            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
-            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
-            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
-            \ node, and add this node as an aggregator\nsleep 30\n\nget_public_key()\
-            \ {\n    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT\
-            \ value FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
-            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
-            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
-            \ \n"
-          - STACK_NAME: !Ref 'AWS::StackName'
-            TEMPLATE_TYPE: quickstart-10
-            REGION: !Ref 'AWS::Region'
-            WAIT_HANDLE: !Ref 'AggregatorsWaitHandle'
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Aggregator
-              - 3
-        - Key: Role
-          Value: Aggregator
-      ImageId: !FindInMap
-        - AWSAMIRegionMap
-        - !Ref 'AWS::Region'
-        - MEMSQL
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 1024
-      KeyName: !Ref 'KeyPairName'
-      InstanceType: !Ref 'AggInstanceType'
-      NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'Public3306Access'
-            - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
-    Condition: CreateAggregator3
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          files:
-            /tmp/password.txt:
-              owner: root
-              content: !Ref 'RootPassword'
-              group: root
-              mode: '000400'
-  Aggregator1:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData: !Base64
-        Fn::Sub:
-          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
-            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
-            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
-            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
-            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
-            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
-            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
-            \ --resource Aggregator1 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
-            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
-            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
-            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
-            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
-            \ node, and add this node as an aggregator\nsleep 30\n\nget_public_key()\
-            \ {\n    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT\
-            \ value FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
-            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
-            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
-            \ \n"
-          - STACK_NAME: !Ref 'AWS::StackName'
-            TEMPLATE_TYPE: quickstart-10
-            REGION: !Ref 'AWS::Region'
-            WAIT_HANDLE: !Ref 'AggregatorsWaitHandle'
-      Tags:
-        - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - Aggregator
-              - 1
-        - Key: Role
-          Value: Aggregator
-      ImageId: !FindInMap
-        - AWSAMIRegionMap
-        - !Ref 'AWS::Region'
-        - MEMSQL
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 1024
-      KeyName: !Ref 'KeyPairName'
-      InstanceType: !Ref 'AggInstanceType'
-      NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'Public3306Access'
-            - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
-    Condition: CreateAggregator1
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          files:
-            /tmp/password.txt:
-              owner: root
-              content: !Ref 'RootPassword'
-              group: root
-              mode: '000400'
   Master:
     Metadata:
       AWS::CloudFormation::Init:
@@ -1027,7 +353,7 @@ Resources:
             STACK_NAME: !Ref 'AWS::StackName'
             AGGREGATOR_DATA: !GetAtt 'AggregatorsWaitCondition.Data'
             REGION: !Ref 'AWS::Region'
-            TEMPLATE_TYPE: quickstart-10
+            TEMPLATE_TYPE: quickstart-no-vpc-10
             LEAF_DATA: !GetAtt 'LeavesWaitCondition.Data'
             WAIT_HANDLE: !Ref 'MasterWaitHandle'
       Tags:
@@ -1039,9 +365,9 @@ Resources:
         - Key: Role
           Value: Master
       ImageId: !FindInMap
-        - AWSAMIRegionMap
+        - RegionMap
         - !Ref 'AWS::Region'
-        - MEMSQL
+        - AMI
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
@@ -1049,18 +375,679 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'AggInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'PublicSubnetID'
+        - SubnetId: !Ref 'Subnet'
           DeviceIndex: 0
           DeleteOnTermination: 'true'
-          GroupSet:
-            - !Ref 'Public22Access'
-            - !Ref 'Public80Access'
-            - !Ref 'Public3306Access'
-            - !Ref 'InternalAccess'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
           AssociatePublicIpAddress: 'true'
     DependsOn:
       - AggregatorsWaitCondition
       - LeavesWaitCondition
+  Leaf5:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: !Base64
+        Fn::Sub:
+          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
+            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
+            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
+            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
+            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
+            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
+            \ --resource Leaf5 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
+            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
+            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
+            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
+            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
+            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
+            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
+            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
+            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
+            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
+            \ \n"
+          - STACK_NAME: !Ref 'AWS::StackName'
+            TEMPLATE_TYPE: quickstart-no-vpc-10
+            REGION: !Ref 'AWS::Region'
+            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Leaf
+              - 5
+        - Key: Role
+          Value: Leaf
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'LeafInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'Subnet'
+          DeviceIndex: 0
+          DeleteOnTermination: 'true'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
+          AssociatePublicIpAddress: 'true'
+    Condition: CreateLeaf5
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  Leaf4:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: !Base64
+        Fn::Sub:
+          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
+            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
+            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
+            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
+            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
+            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
+            \ --resource Leaf4 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
+            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
+            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
+            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
+            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
+            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
+            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
+            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
+            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
+            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
+            \ \n"
+          - STACK_NAME: !Ref 'AWS::StackName'
+            TEMPLATE_TYPE: quickstart-no-vpc-10
+            REGION: !Ref 'AWS::Region'
+            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Leaf
+              - 4
+        - Key: Role
+          Value: Leaf
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'LeafInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'Subnet'
+          DeviceIndex: 0
+          DeleteOnTermination: 'true'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
+          AssociatePublicIpAddress: 'true'
+    Condition: CreateLeaf4
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  AggregatorsWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  Leaf6:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: !Base64
+        Fn::Sub:
+          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
+            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
+            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
+            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
+            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
+            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
+            \ --resource Leaf6 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
+            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
+            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
+            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
+            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
+            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
+            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
+            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
+            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
+            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
+            \ \n"
+          - STACK_NAME: !Ref 'AWS::StackName'
+            TEMPLATE_TYPE: quickstart-no-vpc-10
+            REGION: !Ref 'AWS::Region'
+            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Leaf
+              - 6
+        - Key: Role
+          Value: Leaf
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'LeafInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'Subnet'
+          DeviceIndex: 0
+          DeleteOnTermination: 'true'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
+          AssociatePublicIpAddress: 'true'
+    Condition: CreateLeaf6
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  Leaf1:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: !Base64
+        Fn::Sub:
+          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
+            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
+            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
+            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
+            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
+            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
+            \ --resource Leaf1 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
+            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
+            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
+            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
+            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
+            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
+            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
+            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
+            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
+            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
+            \ \n"
+          - STACK_NAME: !Ref 'AWS::StackName'
+            TEMPLATE_TYPE: quickstart-no-vpc-10
+            REGION: !Ref 'AWS::Region'
+            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Leaf
+              - 1
+        - Key: Role
+          Value: Leaf
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'LeafInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'Subnet'
+          DeviceIndex: 0
+          DeleteOnTermination: 'true'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
+          AssociatePublicIpAddress: 'true'
+    Condition: CreateLeaf1
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  Leaf3:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: !Base64
+        Fn::Sub:
+          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
+            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
+            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
+            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
+            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
+            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
+            \ --resource Leaf3 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
+            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
+            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
+            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
+            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
+            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
+            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
+            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
+            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
+            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
+            \ \n"
+          - STACK_NAME: !Ref 'AWS::StackName'
+            TEMPLATE_TYPE: quickstart-no-vpc-10
+            REGION: !Ref 'AWS::Region'
+            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Leaf
+              - 3
+        - Key: Role
+          Value: Leaf
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'LeafInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'Subnet'
+          DeviceIndex: 0
+          DeleteOnTermination: 'true'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
+          AssociatePublicIpAddress: 'true'
+    Condition: CreateLeaf3
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  Internal3306AccessIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      SourceSecurityGroupId: !Ref 'InternalAccess'
+      ToPort: '3306'
+      IpProtocol: tcp
+      GroupId: !Ref 'InternalAccess'
+      FromPort: '3306'
+  LeavesWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  Leaf2:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: !Base64
+        Fn::Sub:
+          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
+            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
+            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
+            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
+            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
+            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
+            \ --resource Leaf2 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
+            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
+            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
+            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
+            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
+            \ node, and add this node as an leaf\nsleep 30\n\nget_public_key() {\n\
+            \    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT value\
+            \ FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
+            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
+            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
+            \ \n"
+          - STACK_NAME: !Ref 'AWS::StackName'
+            TEMPLATE_TYPE: quickstart-no-vpc-10
+            REGION: !Ref 'AWS::Region'
+            WAIT_HANDLE: !Ref 'LeavesWaitHandle'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Leaf
+              - 2
+        - Key: Role
+          Value: Leaf
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'LeafInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'Subnet'
+          DeviceIndex: 0
+          DeleteOnTermination: 'true'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
+          AssociatePublicIpAddress: 'true'
+    Condition: CreateLeaf2
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  LeavesWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    Properties:
+      Count: !Ref 'NumLeaves'
+      Handle: !Ref 'LeavesWaitHandle'
+      Timeout: 3000
+  InternalAccess:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref 'VPC'
+      GroupDescription: Internal access to port 3306 and 22
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - InternalAccessSecurityGroup
+  Aggregator2:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: !Base64
+        Fn::Sub:
+          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
+            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
+            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
+            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
+            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
+            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
+            \ --resource Aggregator2 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
+            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
+            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
+            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
+            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
+            \ node, and add this node as an aggregator\nsleep 30\n\nget_public_key()\
+            \ {\n    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT\
+            \ value FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
+            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
+            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
+            \ \n"
+          - STACK_NAME: !Ref 'AWS::StackName'
+            TEMPLATE_TYPE: quickstart-no-vpc-10
+            REGION: !Ref 'AWS::Region'
+            WAIT_HANDLE: !Ref 'AggregatorsWaitHandle'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Aggregator
+              - 2
+        - Key: Role
+          Value: Aggregator
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'AggInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'Subnet'
+          DeviceIndex: 0
+          DeleteOnTermination: 'true'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
+          AssociatePublicIpAddress: 'true'
+    Condition: CreateAggregator2
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  Aggregator3:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: !Base64
+        Fn::Sub:
+          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
+            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
+            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
+            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
+            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
+            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
+            \ --resource Aggregator3 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
+            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
+            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
+            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
+            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
+            \ node, and add this node as an aggregator\nsleep 30\n\nget_public_key()\
+            \ {\n    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT\
+            \ value FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
+            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
+            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
+            \ \n"
+          - STACK_NAME: !Ref 'AWS::StackName'
+            TEMPLATE_TYPE: quickstart-no-vpc-10
+            REGION: !Ref 'AWS::Region'
+            WAIT_HANDLE: !Ref 'AggregatorsWaitHandle'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Aggregator
+              - 3
+        - Key: Role
+          Value: Aggregator
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'AggInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'Subnet'
+          DeviceIndex: 0
+          DeleteOnTermination: 'true'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
+          AssociatePublicIpAddress: 'true'
+    Condition: CreateAggregator3
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  Aggregator1:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: !Base64
+        Fn::Sub:
+          - "#!/bin/bash\nINTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\
+            \necho 'MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}' >> /etc/environment\n\
+            export MEMSQL_OPS_USER_AGENT_SUFFIX=cf-${TEMPLATE_TYPE}\n\ncheck_error()\
+            \ {\n    # capture stderr without stdout, which contains prompt and dry-run\n\
+            \    OUT=$(\"$@\" 2>&1 > /dev/null)\n    if [ $? -ne 0 ]; then\n     \
+            \   /opt/aws/bin/cfn-signal -s false --reason \"$OUT\" '${WAIT_HANDLE}'\n\
+            \        exit 1\n    fi\n}\n\n/opt/aws/bin/cfn-init -v --stack '${STACK_NAME}'\
+            \ --resource Aggregator1 --region ${REGION}\nROOT_PASSWORD=$(cat /tmp/password.txt)\n\
+            rm /tmp/password.txt\n\ncheck_error memsqlctl create-node --password \"\
+            $ROOT_PASSWORD\" --yes\n\n/opt/aws/bin/cfn-signal -s true -d '{\"Host\"\
+            :\"'$INTERNAL_IP'\",\"Port\":3306}' '${WAIT_HANDLE}'\n\n# Wait before\
+            \ the EC2 instance for the master to spin up, create the\n# master aggregator\
+            \ node, and add this node as an aggregator\nsleep 30\n\nget_public_key()\
+            \ {\n    memsql -u root --password=\"$ROOT_PASSWORD\" -s -N -e \"SELECT\
+            \ value FROM memsql_security.keys\" || echo ''\n}\n\nPUBLIC_KEY=\"$(get_public_key)\"\
+            \n\nwhile [ -z \"$PUBLIC_KEY\" ]; do\n    sleep 2\n\n    PUBLIC_KEY=\"\
+            $(get_public_key)\"\ndone\n\necho $PUBLIC_KEY >> /home/ec2-user/.ssh/authorized_keys\
+            \ \n"
+          - STACK_NAME: !Ref 'AWS::StackName'
+            TEMPLATE_TYPE: quickstart-no-vpc-10
+            REGION: !Ref 'AWS::Region'
+            WAIT_HANDLE: !Ref 'AggregatorsWaitHandle'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Aggregator
+              - 1
+        - Key: Role
+          Value: Aggregator
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 1024
+      KeyName: !Ref 'KeyPairName'
+      InstanceType: !Ref 'AggInstanceType'
+      NetworkInterfaces:
+        - SubnetId: !Ref 'Subnet'
+          DeviceIndex: 0
+          DeleteOnTermination: 'true'
+          GroupSet: !Split
+            - ','
+            - !Join
+              - ','
+              - - !Join
+                  - ','
+                  - !Ref 'SecurityGroups'
+                - !Ref 'InternalAccess'
+          AssociatePublicIpAddress: 'true'
+    Condition: CreateAggregator1
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/password.txt:
+              owner: root
+              content: !Ref 'RootPassword'
+              group: root
+              mode: '000400'
+  Internal22AccessIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      SourceSecurityGroupId: !Ref 'InternalAccess'
+      ToPort: '22'
+      IpProtocol: tcp
+      GroupId: !Ref 'InternalAccess'
+      FromPort: '22'
 Outputs:
   AggregatorLoadBalancerEndpoint:
     Description: Public DNSName of the load balancer for the aggregators
@@ -1068,3 +1055,4 @@ Outputs:
   MasterAggregator:
     Description: Public DNSName of the master aggregator
     Value: !GetAtt 'Master.PublicDnsName'
+

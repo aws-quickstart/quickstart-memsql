@@ -186,3 +186,6 @@ Resources:
         RemoteAccessCIDR: !Ref RemoteAccessCIDR
         KeyPairName: !Ref KeyPairName
         AvailabilityZone: !Ref AvailabilityZone
+        SecurityGroups: !GetAtt
+          - VPCStack
+          - MemSQLAccess
