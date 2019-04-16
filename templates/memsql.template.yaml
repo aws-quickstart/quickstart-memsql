@@ -66,7 +66,7 @@ Parameters:
     Description: A license you received from the MemSQL Customer Portal
     ConstraintDescription: Must provide a MemSQL license from the MemSQL Customer
       Portal at https://portal.memsql.com.
-  Subnet:
+  PublicSubnetID:
     Type: AWS::EC2::Subnet::Id
     Description: ID of subnet to launch into. Must be in VPC defined above
   EnableHighAvailability:
@@ -87,7 +87,7 @@ Parameters:
     Type: Number
     Description: Number of leaves in the cluster (between 1 and 6)
     MaxValue: 6
-  VPC:
+  VPCID:
     Type: AWS::EC2::VPC::Id
     Description: ID of the VPC to launch into
   RootPassword:
@@ -118,13 +118,13 @@ Metadata:
         Label:
           default: Advanced Configuration
       - Parameters:
-          - VPC
-          - Subnet
+          - VPCID
+          - PublicSubnetID
           - SecurityGroups
         Label:
           default: VPC Configuration (Required)
     ParameterLabels:
-      Subnet:
+      PublicSubnetID:
         default: Subnet ID*
       NumLeaves:
         default: Number of Leaves*
@@ -140,7 +140,7 @@ Metadata:
         default: Security Group IDs*
       AggInstanceType:
         default: Aggregator Instance Type*
-      VPC:
+      VPCID:
         default: VPC ID*
       RootPassword:
         default: MemSQL Password*
@@ -235,17 +235,17 @@ Resources:
     Properties:
       Count: !Ref 'NumAggregators'
       Handle: !Ref 'AggregatorsWaitHandle'
-      Timeout: 3000
+      Timeout: '3000'
   MasterWaitCondition:
     Type: AWS::CloudFormation::WaitCondition
     Properties:
       Handle: !Ref 'MasterWaitHandle'
-      Timeout: 3000
+      Timeout: '3000'
   NetworkLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Subnets:
-        - !Ref 'Subnet'
+        - !Ref 'PublicSubnetID'
       Scheme: internet-facing
       Type: network
       Tags:
@@ -258,7 +258,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Port: 3306
-      VpcId: !Ref 'VPC'
+      VpcId: !Ref 'VPCID'
       Protocol: TCP
       Targets:
         - Port: 3306
@@ -375,9 +375,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'AggInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -386,7 +386,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     DependsOn:
       - AggregatorsWaitCondition
       - LeavesWaitCondition
@@ -437,9 +437,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'LeafInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -448,7 +448,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     Condition: CreateLeaf5
     Metadata:
       AWS::CloudFormation::Init:
@@ -506,9 +506,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'LeafInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -517,7 +517,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     Condition: CreateLeaf4
     Metadata:
       AWS::CloudFormation::Init:
@@ -577,9 +577,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'LeafInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -588,7 +588,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     Condition: CreateLeaf6
     Metadata:
       AWS::CloudFormation::Init:
@@ -646,9 +646,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'LeafInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -657,7 +657,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     Condition: CreateLeaf1
     Metadata:
       AWS::CloudFormation::Init:
@@ -715,9 +715,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'LeafInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -726,7 +726,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     Condition: CreateLeaf3
     Metadata:
       AWS::CloudFormation::Init:
@@ -741,10 +741,10 @@ Resources:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       SourceSecurityGroupId: !Ref 'InternalAccess'
-      ToPort: '3306'
+      ToPort: 3306
       IpProtocol: tcp
       GroupId: !Ref 'InternalAccess'
-      FromPort: '3306'
+      FromPort: 3306
   LeavesWaitHandle:
     Type: AWS::CloudFormation::WaitConditionHandle
   Leaf2:
@@ -794,9 +794,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'LeafInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -805,7 +805,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     Condition: CreateLeaf2
     Metadata:
       AWS::CloudFormation::Init:
@@ -825,7 +825,7 @@ Resources:
   InternalAccess:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref 'VPC'
+      VpcId: !Ref 'VPCID'
       GroupDescription: Internal access to port 3306 and 22
       Tags:
         - Key: Name
@@ -880,9 +880,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'AggInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -891,7 +891,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     Condition: CreateAggregator2
     Metadata:
       AWS::CloudFormation::Init:
@@ -949,9 +949,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'AggInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -960,7 +960,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     Condition: CreateAggregator3
     Metadata:
       AWS::CloudFormation::Init:
@@ -1018,9 +1018,9 @@ Resources:
       KeyName: !Ref 'KeyPairName'
       InstanceType: !Ref 'AggInstanceType'
       NetworkInterfaces:
-        - SubnetId: !Ref 'Subnet'
-          DeviceIndex: 0
-          DeleteOnTermination: 'true'
+        - SubnetId: !Ref 'PublicSubnetID'
+          DeviceIndex: '0'
+          DeleteOnTermination: true
           GroupSet: !Split
             - ','
             - !Join
@@ -1029,7 +1029,7 @@ Resources:
                   - ','
                   - !Ref 'SecurityGroups'
                 - !Ref 'InternalAccess'
-          AssociatePublicIpAddress: 'true'
+          AssociatePublicIpAddress: true
     Condition: CreateAggregator1
     Metadata:
       AWS::CloudFormation::Init:
@@ -1044,10 +1044,10 @@ Resources:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       SourceSecurityGroupId: !Ref 'InternalAccess'
-      ToPort: '22'
+      ToPort: 22
       IpProtocol: tcp
       GroupId: !Ref 'InternalAccess'
-      FromPort: '22'
+      FromPort: 22
 Outputs:
   AggregatorLoadBalancerEndpoint:
     Description: Public DNSName of the load balancer for the aggregators

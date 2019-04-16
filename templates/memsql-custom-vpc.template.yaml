@@ -36,6 +36,8 @@ Metadata:
         default: VPC CIDR
       VPCTenancy:
         default: VPC Tenancy
+      RemoteAccessCIDR:
+        default: Remote Access CIDR
 Parameters:
   AvailabilityZone:
     Description: 'A single Availability Zones to use for the subnets in the VPC.'
@@ -69,7 +71,7 @@ Parameters:
     Description: tag to add to public subnets, in format Key=Value (Optional)
     Type: String
   RemoteAccessCIDR:
-    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1.3})\.(\d{1,3})/(\d{1,2})
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
     Default: '0.0.0.0/0'
     Type: String
     Description: IP CIDR Range that is allowed to access the nodes (Including SSH, MemSQL on 3306, and viewing the MemSQL Studio)
@@ -212,20 +214,21 @@ Resources:
   MemSQLAccess:
     Type: AWS::EC2::SecurityGroup
     Properties:
-        SecurityGroupIngress:
-         - ToPort: '22'
-           FromPort: '22'
-           IpProtocol: tcp
-           CidrIp: !Ref 'RemoteAccessCIDR'
-         - ToPort: '3306'
-           FromPort: '3306'
-           IpProtocol: tcp
-           CidrIp: !Ref 'RemoteAccessCIDR'
-         - ToPort: '80'
-           FromPort: '80'
-           IpProtocol: tcp
-           CidrIp: !ref 'RemoteAccessCIDR'
-        VpcId: !Ref 'VPCID'
+      SecurityGroupIngress:
+        - ToPort: 22
+          FromPort: 22
+          IpProtocol: tcp
+          CidrIp: !Ref 'RemoteAccessCIDR'
+        - ToPort: 3306
+          FromPort: 3306
+          IpProtocol: tcp
+          CidrIp: !Ref 'RemoteAccessCIDR'
+        - ToPort: 800
+          FromPort: 80
+          IpProtocol: tcp
+          CidrIp: !Ref 'RemoteAccessCIDR'
+      VpcId: !Ref 'VPC'
+      GroupDescription: "Rules for the MemSQL Cluster"
 
 Outputs:
   PublicSubnet1CIDR:

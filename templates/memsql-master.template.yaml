@@ -165,6 +165,7 @@ Resources:
         AvailabilityZone: !Ref AvailabilityZone
         VPCCIDR: !Ref VPCCIDR
         PublicSubnet1CIDR: !Ref PublicSubnetCIDR
+        RemoteAccessCIDR: !Ref RemoteAccessCIDR
   MemsqlStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -183,9 +184,7 @@ Resources:
           - VPCStack
           - Outputs.VPCID
         RootPassword: !Ref RootPassword
-        RemoteAccessCIDR: !Ref RemoteAccessCIDR
         KeyPairName: !Ref KeyPairName
-        AvailabilityZone: !Ref AvailabilityZone
         SecurityGroups: !GetAtt
           - VPCStack
-          - MemSQLAccess
+          - Outputs.MemSQLAccessSG
