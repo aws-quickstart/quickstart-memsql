@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: This CloudFormation template performs all the necessary steps of deploying
   a MemSQL cluster into an existing VPC, and configuring the Studio environment with
   your cluster's information. This creates a MemSQL cluster running memsql-server
-  6.7.16-55671ba478, memsql-studio 1.5.6, and memsql-toolbox 1.1.0.
+  6.7.16-55671ba478, memsql-studio 1.5.6, and memsql-toolbox 1.1.1.
 Parameters:
   AggInstanceType:
     Default: m4.2xlarge
@@ -149,35 +149,35 @@ Metadata:
 Mappings:
   RegionMap:
     us-west-1:
-      AMI: ami-05d8b12f9ad5aa103
+      AMI: ami-03636910750648603
     us-east-1:
-      AMI: ami-098b9ea0ef1deb1cf
+      AMI: ami-0312dc6ae7e5b5d5c
     ap-northeast-1:
-      AMI: ami-0d8d7c95f047c97f2
+      AMI: ami-09038ea33b412698e
     sa-east-1:
-      AMI: ami-0ce0e6d4d7885c41f
+      AMI: ami-04827cdda27c90aa4
     ap-northeast-2:
-      AMI: ami-09cc929eb4c633568
+      AMI: ami-00c8307aabc4d662a
     ap-southeast-1:
-      AMI: ami-0ac949e1e6971dadd
+      AMI: ami-0168848637ae95208
     ca-central-1:
-      AMI: ami-0b2236dde78dbaf5f
+      AMI: ami-02633d5831b178e85
     ap-southeast-2:
-      AMI: ami-06054c1d19e0b3a94
+      AMI: ami-0f5c1e9796c193b3c
     us-west-2:
-      AMI: ami-0acae8bcf0097b691
+      AMI: ami-0581da34045f4568d
     us-east-2:
-      AMI: ami-0f652874ba4077905
+      AMI: ami-0293454c376273d8f
     ap-south-1:
-      AMI: ami-08e9c0c041c1201dc
+      AMI: ami-045c174940290c621
     eu-central-1:
-      AMI: ami-0f932a72407c1f5fd
+      AMI: ami-03fa64999bc7b2bc4
     eu-west-1:
-      AMI: ami-02b87cc60e5ad9489
+      AMI: ami-0a54badaba1862d13
     eu-west-2:
-      AMI: ami-09607a5808801e8ff
+      AMI: ami-01c40c3f8b4266d94
     eu-west-3:
-      AMI: ami-00dab4b413c2248f3
+      AMI: ami-0e174995fd907bfab
 Conditions:
   CreateLeaf6: !Equals
     - !Ref 'NumLeaves'
