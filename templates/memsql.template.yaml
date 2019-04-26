@@ -52,6 +52,9 @@ Parameters:
       - c5d.xlarge
       - c5d.2xlarge
       - c5d.4xlarge
+  VPCID:
+    Type: AWS::EC2::VPC::Id
+    Description: ID of the VPC to launch into
   NumAggregators:
     Default: 1
     MinValue: 0
@@ -66,9 +69,6 @@ Parameters:
     Description: A license you received from the MemSQL Customer Portal
     ConstraintDescription: Must provide a MemSQL license from the MemSQL Customer
       Portal at https://portal.memsql.com.
-  PublicSubnetID:
-    Type: AWS::EC2::Subnet::Id
-    Description: ID of subnet to launch into. Must be in VPC defined above
   EnableHighAvailability:
     Default: 'true'
     Type: String
@@ -87,9 +87,6 @@ Parameters:
     Type: Number
     Description: Number of leaves in the cluster (between 1 and 6)
     MaxValue: 6
-  VPCID:
-    Type: AWS::EC2::VPC::Id
-    Description: ID of the VPC to launch into
   RootPassword:
     AllowedPattern: .+
     Type: String
@@ -97,6 +94,9 @@ Parameters:
     Description: Provide a MemSQL root password that will be set for all the nodes
       in your cluster
     ConstraintDescription: Must provide a MemSQL root password
+  PublicSubnetID:
+    Type: AWS::EC2::Subnet::Id
+    Description: ID of subnet to launch into. Must be in VPC defined above
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: The EC2 Key Pair to allow SSH access to the nodes.
@@ -124,26 +124,26 @@ Metadata:
         Label:
           default: VPC Configuration (Required)
     ParameterLabels:
-      PublicSubnetID:
-        default: Subnet ID*
-      NumLeaves:
-        default: Number of Leaves*
+      LeafInstanceType:
+        default: Leaf Instance Type*
+      VPCID:
+        default: VPC ID*
       NumAggregators:
         default: Number of Child Aggregators*
       License:
         default: License*
-      LeafInstanceType:
-        default: Leaf Instance Type*
       EnableHighAvailability:
         default: Enable High Availability*
       SecurityGroups:
         default: Security Group IDs*
       AggInstanceType:
         default: Aggregator Instance Type*
-      VPCID:
-        default: VPC ID*
       RootPassword:
         default: MemSQL Password*
+      PublicSubnetID:
+        default: Subnet ID*
+      NumLeaves:
+        default: Number of Leaves*
       KeyPairName:
         default: Key Name*
 Mappings:
