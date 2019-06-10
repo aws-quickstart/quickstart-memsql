@@ -135,6 +135,16 @@ Metadata:
           - RemoteAccessCIDR
         Label:
           default: Advanced Configuration
+      - Parameters:
+          - VPCCIDR
+          - PublicSubnetCIDR
+        Label:
+          default: Network Configuration
+      - Parameters:
+          - QSS3BucketName
+          - QSS3KeyPrefix
+        Label:
+          default: AWS Quick Start configuration
     ParameterLabels:
       LeafInstanceType:
         default: Leaf Instance Type*
@@ -156,6 +166,14 @@ Metadata:
         default: CIDR Range for Remote Access
       AggInstanceType:
         default: Aggregator Instance Type*
+      QSS3BucketName:
+        default: Quick Start S3 bucket name
+      QSS3KeyPrefix:
+        default: Quick Start S3 key prefix
+      PublicSubnetCIDR:
+        default: Public subnet CIDR
+      VPCCIDR:
+        default: VPC CIDR
 Resources:
   VPCStack:
     Type: AWS::CloudFormation::Stack
