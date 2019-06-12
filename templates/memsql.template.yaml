@@ -125,27 +125,27 @@ Metadata:
           default: VPC Configuration (Required)
     ParameterLabels:
       PublicSubnetID:
-        default: Subnet ID*
+        default: Subnet ID
       NumLeaves:
-        default: Number of Leaves*
+        default: Number of Leaves
       NumAggregators:
-        default: Number of Child Aggregators*
+        default: Number of Child Aggregators
       License:
-        default: License*
+        default: License
       LeafInstanceType:
-        default: Leaf Instance Type*
+        default: Leaf Instance Type
       EnableHighAvailability:
-        default: Enable High Availability*
+        default: Enable High Availability
       SecurityGroups:
-        default: Security Group IDs*
+        default: Security Group IDs
       AggInstanceType:
-        default: Aggregator Instance Type*
+        default: Aggregator Instance Type
       VPCID:
-        default: VPC ID*
+        default: VPC ID
       RootPassword:
-        default: MemSQL Password*
+        default: MemSQL Password
       KeyPairName:
-        default: Key Name*
+        default: Key Name
 Mappings:
   RegionMap:
     us-west-1:

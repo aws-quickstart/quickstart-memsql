@@ -147,25 +147,25 @@ Metadata:
           default: AWS Quick Start configuration
     ParameterLabels:
       LeafInstanceType:
-        default: Leaf Instance Type*
+        default: Leaf Instance Type
       AvailabilityZone:
         default: Availability Zone
       NumAggregators:
-        default: Number of Child Aggregators*
+        default: Number of Child Aggregators
       License:
-        default: License*
+        default: License
       EnableHighAvailability:
-        default: Enable High Availability*
+        default: Enable High Availability
       NumLeaves:
-        default: Number of Leaves*
+        default: Number of Leaves
       RootPassword:
-        default: MemSQL Password*
+        default: MemSQL Password
       KeyPairName:
-        default: Key Name*
+        default: Key pair name
       RemoteAccessCIDR:
         default: CIDR Range for Remote Access
       AggInstanceType:
-        default: Aggregator Instance Type*
+        default: Aggregator Instance Type
       QSS3BucketName:
         default: Quick Start S3 bucket name
       QSS3KeyPrefix:
