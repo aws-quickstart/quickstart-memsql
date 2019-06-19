@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: This custom VPC template creates a SINGLE-AZ, multi-subnet VPC infrastructure with
+Description: This custom VPC template creates a SINGLE-AZ, single-subnet VPC infrastructure with
   managed NAT gateways in the public subnet within the  Availability Zone. You can also
   create additional private subnets with dedicated custom network access control lists
   (ACLs). If you deploy the Quick Start in a region that doesn't support NAT gateways,
