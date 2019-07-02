@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: This CloudFormation template performs all the necessary steps of deploying
   a MemSQL cluster into an existing VPC, and configuring the Studio environment with
   your cluster's information. This creates a MemSQL cluster running memsql-server
-  6.7.16-55671ba478, memsql-studio 1.5.6, and memsql-toolbox 1.1.1.
+  6.7.16-55671ba478, memsql-studio 1.5.6, and memsql-toolbox 1.1.1. (qs-1po30j053)
 Parameters:
   AggInstanceType:
     Default: m4.2xlarge
@@ -52,9 +52,6 @@ Parameters:
       - c5d.xlarge
       - c5d.2xlarge
       - c5d.4xlarge
-  VPCID:
-    Type: AWS::EC2::VPC::Id
-    Description: ID of the VPC to launch into
   NumAggregators:
     Default: 1
     MinValue: 0
@@ -100,9 +97,6 @@ Parameters:
     Description: Provide a MemSQL root password that will be set for all the nodes
       in your cluster
     ConstraintDescription: Must provide a MemSQL root password
-  PublicSubnetID:
-    Type: AWS::EC2::Subnet::Id
-    Description: ID of subnet to launch into. Must be in VPC defined above
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: The EC2 Key Pair to allow SSH access to the nodes.

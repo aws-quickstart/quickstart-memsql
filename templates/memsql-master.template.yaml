@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: This CloudFormation template performs all the necessary steps of creating
   a VPC, subnet, and security groups; deploying a MemSQL cluster; and configuring
   the Studio environment with your cluster's information. This creates a MemSQL cluster
-  running memsql-server 6.7.8-a5a87c0575 and memsql-studio 1.5.0
+  running memsql-server 6.7.8-a5a87c0575 and memsql-studio 1.5.0. (qs-1po30j033)
 Parameters:
   AggInstanceType:
     Default: m4.2xlarge
