@@ -12,13 +12,12 @@ global:
     - ca-central-1
     - eu-central-1
     - eu-west-1
- #   - sa-east-1
+    - sa-east-1
     - us-east-1
     - us-east-2
     - us-west-1
     - us-west-2
-  tests:
-    quickstart-memsql:
-      template_file: memsql-master.template.yaml
-      parameter_input: memsql-3node.json
-      regions:
+tests:
+  quickstart-memsql:
+    template_file: memsql-master.template.yaml
+    parameter_input: memsql-3node.json
